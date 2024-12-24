@@ -9,6 +9,7 @@ export class SchedulerRegistry {
   private readonly cronJobs = new Map<string, CronJob>();
   private readonly timeouts = new Map<string, any>();
   private readonly intervals = new Map<string, any>();
+  private readonly intervalsFunction = new Map<string, any>();
 
   doesExist(type: 'cron' | 'timeout' | 'interval', name: string) {
     switch (type) {
@@ -111,5 +112,16 @@ export class SchedulerRegistry {
         this.logger.error(error);
       }
     };
+  }
+
+  addIntervalFunction(name: string, intervalIFun: Function) {
+    const ref = this.intervalsFunction.get(name);
+    if (!ref) {
+      this.intervalsFunction.set(name, intervalIFun);
+    }
+  }
+
+  getIntervalFunction() {
+    return this.intervalsFunction;
   }
 }

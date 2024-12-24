@@ -108,6 +108,7 @@ export class SchedulerOrchestrator
       target: methodRef,
       timeout,
     };
+    this.schedulerRegistry.addIntervalFunction(name, methodRef);
   }
 
   addCron(
