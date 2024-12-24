@@ -4,7 +4,7 @@
   "description": "Nest - modern, fast, powerful node.js web framework (@schedule)",
   "author": "Kamil Mysliwiec",
   "license": "MIT",
-  "url": "https://github.com/nestjs/schedule#readme",
+  "url": "https://github.com/AndyBeat/schedule#readme",
   "scripts": {
     "build": "rimraf -rf dist && tsc -p tsconfig.json",
     "format": "prettier **/**/*.ts --ignore-path ./.prettierignore --write",
@@ -65,6 +65,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nestjs/schedule"
+    "url": "git+https://github.com/AndyBeat/schedule.git"
   }
 }
