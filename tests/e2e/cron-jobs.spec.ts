@@ -44,14 +44,21 @@ describe('Cron', () => {
   it(`should catch and log exception inside cron-function added by scheduler`, async () => {
     await app.init();
     const registry = app.get(SchedulerRegistry);
+    const errorHandlerSpy = jest.fn();
+
     registry['logger'].error = jest.fn();
-    const job = new CronJob(CronExpression.EVERY_SECOND, () => {
-      throw new Error('ERROR IN CRONJOB GOT CATCHED');
+    const job = CronJob.from({
+      cronTime: CronExpression.EVERY_SECOND,
+      onTick: () => {
+        throw new Error('ERROR IN CRONJOB GOT CATCHED');
+      },
+      errorHandler: errorHandlerSpy,
     });
     registry.addCronJob('THROWS_EXCEPTION_INSIDE', job);
     job.start();
     clock.tick('1');
-    expect(registry['logger'].error).toHaveBeenCalledWith(
+
+    expect(errorHandlerSpy).toHaveBeenCalledWith(
       new Error('ERROR IN CRONJOB GOT CATCHED'),
     );
   });
@@ -72,6 +79,80 @@ describe('Cron', () => {
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:00:30.000Z'));
 
     clock.tick('31');
+    expect(job.running).toBe(false);
+  });
+
+  it(`should wait for "cron" to complete`, async () => {
+    // run every minute for 61 seconds
+    // 00:01:00 - 00:02:01
+    // 00:02:00 - skipped
+    // 00:03:00 - 00:04:01
+    // 00:04:00 - skipped
+    // 00:05:00 - 00:06:01
+
+    const service = app.get(CronService);
+
+    await app.init();
+    const registry = app.get(SchedulerRegistry);
+    const job = registry.getCronJob('WAIT_FOR_COMPLETION');
+    deleteAllRegisteredJobsExceptOne(registry, 'WAIT_FOR_COMPLETION');
+
+    expect(job.running).toBe(true);
+    expect(service.callsCount).toEqual(0);
+
+    await clock.tickAsync('01:00');
+    // 00:01:00
+    expect(service.callsCount).toEqual(1);
+    expect(service.callsFinishedCount).toEqual(0);
+    expect(job.lastDate()).toEqual(new Date('2020-01-01T00:01:00.000Z'));
+
+    await clock.tickAsync('00:01');
+    // 00:01:01
+    expect(service.callsCount).toEqual(1);
+    expect(service.callsFinishedCount).toEqual(0);
+
+    await clock.tickAsync('00:59');
+    // 00:02:00
+    expect(service.callsCount).toEqual(1);
+    expect(service.callsFinishedCount).toEqual(0);
+
+    await clock.tickAsync('00:01');
+    // 00:02:01
+    expect(service.callsCount).toEqual(1);
+    expect(service.callsFinishedCount).toEqual(1);
+    expect(job.lastDate()).toEqual(new Date('2020-01-01T00:02:00.000Z'));
+
+    await clock.tickAsync('00:59');
+    // 00:03:00
+    expect(service.callsCount).toEqual(2);
+    expect(service.callsFinishedCount).toEqual(1);
+
+    await clock.tickAsync('00:01');
+    // 00:03:01
+    expect(service.callsCount).toEqual(2);
+    expect(service.callsFinishedCount).toEqual(1);
+    expect(job.lastDate()).toEqual(new Date('2020-01-01T00:03:00.000Z'));
+
+    await clock.tickAsync('00:59');
+    // 00:04:00
+    expect(service.callsCount).toEqual(2);
+    expect(service.callsFinishedCount).toEqual(1);
+
+    await clock.tickAsync('00:01');
+    // 00:04:01
+    expect(service.callsCount).toEqual(2);
+    expect(service.callsFinishedCount).toEqual(2);
+    expect(job.lastDate()).toEqual(new Date('2020-01-01T00:04:00.000Z'));
+
+    await clock.tickAsync('00:59');
+    // 00:05:00
+    expect(service.callsCount).toEqual(3);
+    expect(service.callsFinishedCount).toEqual(2);
+
+    await clock.tickAsync('01:01');
+    // 00:06:01
+    expect(service.callsCount).toEqual(3);
+    expect(service.callsFinishedCount).toEqual(3);
     expect(job.running).toBe(false);
   });
 

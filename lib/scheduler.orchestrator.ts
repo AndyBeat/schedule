@@ -4,7 +4,6 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { CronCallback, CronJob, CronJobParams } from 'cron';
-import { v4 } from 'uuid';
 import { CronOptions } from './decorators/cron.decorator';
 import { SchedulerRegistry } from './scheduler.registry';
 
@@ -22,7 +21,8 @@ type CronJobOptions = TargetHost & CronOptionsHost & RefHost<CronJob>;
 
 @Injectable()
 export class SchedulerOrchestrator
-  implements OnApplicationBootstrap, OnApplicationShutdown {
+  implements OnApplicationBootstrap, OnApplicationShutdown
+{
   private readonly cronJobs: Record<string, CronJobOptions> = {};
   private readonly timeouts: Record<string, TimeoutOptions> = {};
   private readonly intervals: Record<string, IntervalOptions> = {};
@@ -70,7 +70,7 @@ export class SchedulerOrchestrator
       const cronJob = CronJob.from({
         ...options,
         onTick: target as CronCallback<null, false>,
-        start: !options.disabled
+        start: !options.disabled,
       });
 
       this.cronJobs[key].ref = cronJob;
@@ -79,15 +79,15 @@ export class SchedulerOrchestrator
   }
 
   clearTimeouts() {
-    this.schedulerRegistry.getTimeouts().forEach((key) =>
-      this.schedulerRegistry.deleteTimeout(key),
-    );
+    this.schedulerRegistry
+      .getTimeouts()
+      .forEach((key) => this.schedulerRegistry.deleteTimeout(key));
   }
 
   clearIntervals() {
-    this.schedulerRegistry.getIntervals().forEach((key) =>
-      this.schedulerRegistry.deleteInterval(key),
-    );
+    this.schedulerRegistry
+      .getIntervals()
+      .forEach((key) => this.schedulerRegistry.deleteInterval(key));
   }
 
   closeCronJobs() {
@@ -96,14 +96,14 @@ export class SchedulerOrchestrator
     );
   }
 
-  addTimeout(methodRef: Function, timeout: number, name: string = v4()) {
+  addTimeout(methodRef: Function, timeout: number, name: string = crypto.randomUUID()) {
     this.timeouts[name] = {
       target: methodRef,
       timeout,
     };
   }
 
-  addInterval(methodRef: Function, timeout: number, name: string = v4()) {
+  addInterval(methodRef: Function, timeout: number, name: string = crypto.randomUUID()) {
     this.intervals[name] = {
       target: methodRef,
       timeout,
@@ -115,7 +115,7 @@ export class SchedulerOrchestrator
     methodRef: Function,
     options: CronOptions & Record<'cronTime', CronJobParams['cronTime']>,
   ) {
-    const name = options.name || v4();
+    const name = options.name || crypto.randomUUID();
     this.cronJobs[name] = {
       target: methodRef,
       options,
