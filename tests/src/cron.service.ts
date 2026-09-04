@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { Cron } from '../../lib/decorators';
-import { CronExpression } from '../../lib/enums';
-import { SchedulerRegistry } from '../../lib/scheduler.registry';
+import { Cron } from '../../lib/decorators/index.js';
+import { CronExpression } from '../../lib/enums/index.js';
+import { SchedulerRegistry } from '../../lib/scheduler.registry.js';
 import { CronJob } from 'cron';
 
 @Injectable()
@@ -14,6 +14,7 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_SECOND, {
     name: 'EXECUTES_EVERY_SECOND',
+    utcOffset: 0,
   })
   handleCron() {
     ++this.callsCount;
@@ -25,6 +26,7 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_30_SECONDS, {
     name: 'EXECUTES_EVERY_30_SECONDS',
+    utcOffset: 0,
   })
   handleCronEvery30Seconds() {
     ++this.callsCount;
@@ -38,6 +40,7 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_MINUTE, {
     name: 'EXECUTES_EVERY_MINUTE',
+    utcOffset: 0,
   })
   handleCronEveryMinute() {
     ++this.callsCount;
@@ -49,6 +52,7 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_HOUR, {
     name: 'EXECUTES_EVERY_HOUR',
+    utcOffset: 0,
   })
   handleCronEveryHour() {
     ++this.callsCount;
@@ -61,8 +65,30 @@ export class CronService {
   @Cron(CronExpression.EVERY_30_SECONDS, {
     name: 'DISABLED',
     disabled: true,
+    utcOffset: 0,
   })
   handleDisabledCron() {}
+
+  initialDelayCalls = 0;
+
+  @Cron(CronExpression.EVERY_SECOND, {
+    name: 'INITIAL_DELAY',
+    initialDelay: 5000,
+    utcOffset: 0,
+  })
+  handleCronWithInitialDelay() {
+    ++this.initialDelayCalls;
+  }
+
+  @Cron(CronExpression.EVERY_SECOND, {
+    name: 'DISABLED_WITH_INITIAL_DELAY',
+    disabled: true,
+    initialDelay: 1000,
+    utcOffset: 0,
+  })
+  handleDisabledCronWithInitialDelay() {
+    ++this.initialDelayCalls;
+  }
 
   addCronJob(): CronJob {
     const job = new CronJob(CronExpression.EVERY_SECOND, () => {
@@ -79,6 +105,7 @@ export class CronService {
   @Cron(CronExpression.EVERY_MINUTE, {
     name: 'WAIT_FOR_COMPLETION',
     waitForCompletion: true,
+    utcOffset: 0,
   })
   async handleLongRunningCron() {
     ++this.callsCount;

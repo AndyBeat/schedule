@@ -7,7 +7,7 @@ aliases:
   - &install-deps
     run:
       name: Install dependencies
-      command: npm ci --ignore-scripts
+      command: npm install --legacy-peer-deps --ignore-scripts
   - &build-packages
     run:
       name: Build
@@ -17,7 +17,7 @@ jobs:
   build:
     working_directory: ~/nest
     docker:
-      - image: cimg/node:22.3
+      - image: cimg/node:24.20.0
     steps:
       - checkout
       - restore_cache:
@@ -32,11 +32,14 @@ jobs:
       - run:
           name: Build
           command: npm run build
+      - run:
+          name: Verify ESM output is loadable by Node
+          command: node --input-type=module -e "import('./dist/index.js').then(m => { if (!m.ScheduleModule) throw new Error('ScheduleModule missing from ESM entrypoint'); })"
 
   integration_tests:
     working_directory: ~/nest
     docker:
-      - image: cimg/node:22.3
+      - image: cimg/node:24.20.0
     steps:
       - checkout
       - *restore-cache

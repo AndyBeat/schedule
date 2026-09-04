@@ -1,11 +1,12 @@
 import {
+  BeforeApplicationShutdown,
   Injectable,
   OnApplicationBootstrap,
-  OnApplicationShutdown,
 } from '@nestjs/common';
 import { CronCallback, CronJob, CronJobParams } from 'cron';
-import { CronOptions } from './decorators/cron.decorator';
-import { SchedulerRegistry } from './scheduler.registry';
+import { CronOptions } from './decorators/cron.decorator.js';
+import { DUPLICATE_SCHEDULER } from './schedule.messages.js';
+import { SchedulerRegistry } from './scheduler.registry.js';
 
 type TargetHost = { target: Function };
 type TimeoutHost = { timeout: number };
@@ -17,11 +18,13 @@ type CronOptionsHost = {
 
 type IntervalOptions = TargetHost & TimeoutHost & RefHost<number>;
 type TimeoutOptions = TargetHost & TimeoutHost & RefHost<number>;
-type CronJobOptions = TargetHost & CronOptionsHost & RefHost<CronJob>;
+type CronJobOptions = TargetHost &
+  CronOptionsHost &
+  RefHost<CronJob> & { initialDelayRef?: ReturnType<typeof setTimeout> };
 
 @Injectable()
 export class SchedulerOrchestrator
-  implements OnApplicationBootstrap, OnApplicationShutdown
+  implements OnApplicationBootstrap, BeforeApplicationShutdown
 {
   private readonly cronJobs: Record<string, CronJobOptions> = {};
   private readonly timeouts: Record<string, TimeoutOptions> = {};
@@ -35,7 +38,7 @@ export class SchedulerOrchestrator
     this.mountCron();
   }
 
-  onApplicationShutdown() {
+  beforeApplicationShutdown() {
     this.clearTimeouts();
     this.clearIntervals();
     this.closeCronJobs();
@@ -70,11 +73,19 @@ export class SchedulerOrchestrator
       const cronJob = CronJob.from({
         ...options,
         onTick: target as CronCallback<null, false>,
-        start: !options.disabled,
+        start: !options.disabled && !options.initialDelay,
       });
 
       this.cronJobs[key].ref = cronJob;
       this.schedulerRegistry.addCronJob(key, cronJob);
+
+      if (options.initialDelay && options.initialDelay > 0 && !options.disabled) {
+        this.cronJobs[key].initialDelayRef = setTimeout(() => {
+          if (this.schedulerRegistry.doesExist('cron', key)) {
+            cronJob.start();
+          }
+        }, options.initialDelay);
+      }
     });
   }
 
@@ -91,12 +102,20 @@ export class SchedulerOrchestrator
   }
 
   closeCronJobs() {
+    Object.values(this.cronJobs).forEach(({ initialDelayRef }) => {
+      if (initialDelayRef !== undefined) {
+        clearTimeout(initialDelayRef);
+      }
+    });
     Array.from(this.schedulerRegistry.getCronJobs().keys()).forEach((key) =>
       this.schedulerRegistry.deleteCronJob(key),
     );
   }
 
   addTimeout(methodRef: Function, timeout: number, name: string = crypto.randomUUID()) {
+    if (Object.hasOwn(this.timeouts, name)) {
+      throw new Error(DUPLICATE_SCHEDULER('Timeout', name));
+    }
     this.timeouts[name] = {
       target: methodRef,
       timeout,
@@ -104,6 +123,9 @@ export class SchedulerOrchestrator
   }
 
   addInterval(methodRef: Function, timeout: number, name: string = crypto.randomUUID()) {
+    if (Object.hasOwn(this.intervals, name)) {
+      throw new Error(DUPLICATE_SCHEDULER('Interval', name));
+    }
     this.intervals[name] = {
       target: methodRef,
       timeout,
@@ -116,6 +138,9 @@ export class SchedulerOrchestrator
     options: CronOptions & Record<'cronTime', CronJobParams['cronTime']>,
   ) {
     const name = options.name || crypto.randomUUID();
+    if (Object.hasOwn(this.cronJobs, name)) {
+      throw new Error(DUPLICATE_SCHEDULER('Cron Job', name));
+    }
     this.cronJobs[name] = {
       target: methodRef,
       options,

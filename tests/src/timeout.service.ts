@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { Timeout } from '../../lib/decorators';
-import { SchedulerRegistry } from '../../lib/scheduler.registry';
+import { Timeout } from '../../lib/decorators/index.js';
+import { SchedulerRegistry } from '../../lib/scheduler.registry.js';
 
 @Injectable()
 export class TimeoutService {
@@ -17,7 +17,7 @@ export class TimeoutService {
   addTimeout() {
     const timeoutRef = setTimeout(() => {
       this.calledDynamic = true;
-      clearTimeout(this.schedulerRegistry.getInterval('dynamic'));
+      clearTimeout(this.schedulerRegistry.getTimeout('dynamic'));
     }, 2500);
 
     this.schedulerRegistry.addTimeout(
