@@ -4,4 +4,4 @@ export * from './interfaces/schedule-module-options.interface.js';
 export * from './schedule.module.js';
 export * from './schedule.explorer.js';
 export * from './scheduler.registry.js';
-export * from './schedule.constants';
+export * from './schedule.constants.js';
