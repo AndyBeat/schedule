@@ -1,21 +1,27 @@
 import { applyDecorators, SetMetadata } from '@nestjs/common';
-import { SchedulerType } from '../enums/scheduler-type.enum';
+import { SchedulerType } from '../enums/scheduler-type.enum.js';
 import {
   SCHEDULER_NAME,
   SCHEDULER_TYPE,
   SCHEDULE_INTERVAL_OPTIONS,
-} from '../schedule.constants';
+} from '../schedule.constants.js';
 
 /**
  * Schedules an interval (`setInterval`).
+ * 
+ * @publicApi
  */
 export function Interval(timeout: number): MethodDecorator;
 /**
  * Schedules an interval (`setInterval`).
+ * 
+ * @publicApi
  */
 export function Interval(name: string, timeout: number): MethodDecorator;
 /**
  * Schedules an interval (`setInterval`).
+ * 
+ * @publicApi
  */
 export function Interval(
   nameOrTimeout: string | number,

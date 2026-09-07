@@ -1,12 +1,14 @@
-import { INestApplication, Logger } from '@nestjs/common';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { INestApplication, Injectable, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { CronJob } from 'cron';
-import sinon from 'sinon';
-import { CronExpression } from '../../lib';
-import { SchedulerRegistry } from '../../lib/scheduler.registry';
-import { AppModule } from '../src/app.module';
-import { CronService } from '../src/cron.service';
-import { nullPrototypeObjectProvider } from '../src/null-prototype-object.provider';
+import { Cron, CronExpression } from '../../lib/index.js';
+import { DUPLICATE_SCHEDULER } from '../../lib/schedule.messages.js';
+import { ScheduleModule } from '../../lib/schedule.module.js';
+import { SchedulerRegistry } from '../../lib/scheduler.registry.js';
+import { AppModule } from '../src/app.module.js';
+import { CronService } from '../src/cron.service.js';
+import { nullPrototypeObjectProvider } from '../src/null-prototype-object.provider.js';
 
 const deleteAllRegisteredJobsExceptOne = (
   registry: SchedulerRegistry,
@@ -19,7 +21,6 @@ const deleteAllRegisteredJobsExceptOne = (
 
 describe('Cron', () => {
   let app: INestApplication;
-  let clock: sinon.SinonFakeTimers;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -27,7 +28,7 @@ describe('Cron', () => {
     }).compile();
 
     app = module.createNestApplication();
-    clock = sinon.useFakeTimers({ now: 1577836800000 }); // 2020-01-01T00:00:00.000Z
+    vi.useFakeTimers({ now: 1577836800000 }); // 2020-01-01T00:00:00.000Z
   });
 
   it(`should schedule "cron"`, async () => {
@@ -36,7 +37,7 @@ describe('Cron', () => {
     expect(service.callsCount).toEqual(0);
 
     await app.init();
-    clock.tick(3000);
+    vi.advanceTimersByTime(3000);
 
     expect(service.callsCount).toEqual(3);
   });
@@ -44,9 +45,9 @@ describe('Cron', () => {
   it(`should catch and log exception inside cron-function added by scheduler`, async () => {
     await app.init();
     const registry = app.get(SchedulerRegistry);
-    const errorHandlerSpy = jest.fn();
+    const errorHandlerSpy = vi.fn();
 
-    registry['logger'].error = jest.fn();
+    registry['logger'].error = vi.fn();
     const job = CronJob.from({
       cronTime: CronExpression.EVERY_SECOND,
       onTick: () => {
@@ -56,7 +57,7 @@ describe('Cron', () => {
     });
     registry.addCronJob('THROWS_EXCEPTION_INSIDE', job);
     job.start();
-    clock.tick('1');
+    vi.advanceTimersByTime(1_000);
 
     expect(errorHandlerSpy).toHaveBeenCalledWith(
       new Error('ERROR IN CRONJOB GOT CATCHED'),
@@ -71,15 +72,15 @@ describe('Cron', () => {
     const job = registry.getCronJob('EXECUTES_EVERY_30_SECONDS');
     deleteAllRegisteredJobsExceptOne(registry, 'EXECUTES_EVERY_30_SECONDS');
 
-    expect(job.running).toBe(true);
+    expect(job.isActive).toBe(true);
     expect(service.callsCount).toEqual(0);
 
-    clock.tick('30');
+    vi.advanceTimersByTime(30_000);
     expect(service.callsCount).toEqual(1);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:00:30.000Z'));
 
-    clock.tick('31');
-    expect(job.running).toBe(false);
+    vi.advanceTimersByTime(31_000);
+    expect(job.isActive).toBe(false);
   });
 
   it(`should wait for "cron" to complete`, async () => {
@@ -97,63 +98,63 @@ describe('Cron', () => {
     const job = registry.getCronJob('WAIT_FOR_COMPLETION');
     deleteAllRegisteredJobsExceptOne(registry, 'WAIT_FOR_COMPLETION');
 
-    expect(job.running).toBe(true);
+    expect(job.isActive).toBe(true);
     expect(service.callsCount).toEqual(0);
 
-    await clock.tickAsync('01:00');
+    await vi.advanceTimersByTimeAsync(60_000);
     // 00:01:00
     expect(service.callsCount).toEqual(1);
     expect(service.callsFinishedCount).toEqual(0);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:01:00.000Z'));
 
-    await clock.tickAsync('00:01');
+    await vi.advanceTimersByTimeAsync(1_000);
     // 00:01:01
     expect(service.callsCount).toEqual(1);
     expect(service.callsFinishedCount).toEqual(0);
 
-    await clock.tickAsync('00:59');
+    await vi.advanceTimersByTimeAsync(59_000);
     // 00:02:00
     expect(service.callsCount).toEqual(1);
     expect(service.callsFinishedCount).toEqual(0);
 
-    await clock.tickAsync('00:01');
+    await vi.advanceTimersByTimeAsync(1_000);
     // 00:02:01
     expect(service.callsCount).toEqual(1);
     expect(service.callsFinishedCount).toEqual(1);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:02:00.000Z'));
 
-    await clock.tickAsync('00:59');
+    await vi.advanceTimersByTimeAsync(59_000);
     // 00:03:00
     expect(service.callsCount).toEqual(2);
     expect(service.callsFinishedCount).toEqual(1);
 
-    await clock.tickAsync('00:01');
+    await vi.advanceTimersByTimeAsync(1_000);
     // 00:03:01
     expect(service.callsCount).toEqual(2);
     expect(service.callsFinishedCount).toEqual(1);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:03:00.000Z'));
 
-    await clock.tickAsync('00:59');
+    await vi.advanceTimersByTimeAsync(59_000);
     // 00:04:00
     expect(service.callsCount).toEqual(2);
     expect(service.callsFinishedCount).toEqual(1);
 
-    await clock.tickAsync('00:01');
+    await vi.advanceTimersByTimeAsync(1_000);
     // 00:04:01
     expect(service.callsCount).toEqual(2);
     expect(service.callsFinishedCount).toEqual(2);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:04:00.000Z'));
 
-    await clock.tickAsync('00:59');
+    await vi.advanceTimersByTimeAsync(59_000);
     // 00:05:00
     expect(service.callsCount).toEqual(3);
     expect(service.callsFinishedCount).toEqual(2);
 
-    await clock.tickAsync('01:01');
+    await vi.advanceTimersByTimeAsync(61_000);
     // 00:06:01
     expect(service.callsCount).toEqual(3);
     expect(service.callsFinishedCount).toEqual(3);
-    expect(job.running).toBe(false);
+    expect(job.isActive).toBe(false);
   });
 
   it(`should run "cron" 3 times every 60 seconds`, async () => {
@@ -166,12 +167,12 @@ describe('Cron', () => {
     const job = registry.getCronJob('EXECUTES_EVERY_MINUTE');
     deleteAllRegisteredJobsExceptOne(registry, 'EXECUTES_EVERY_MINUTE');
 
-    clock.tick('03:00');
+    vi.advanceTimersByTime(180_000);
     expect(service.callsCount).toEqual(3);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T00:03:00.000Z'));
 
-    clock.tick('03:01');
-    expect(job.running).toBe(false);
+    vi.advanceTimersByTime(181_000);
+    expect(job.isActive).toBe(false);
   });
 
   it(`should run "cron" 3 times every hour`, async () => {
@@ -184,12 +185,12 @@ describe('Cron', () => {
     const job = registry.getCronJob('EXECUTES_EVERY_HOUR');
     deleteAllRegisteredJobsExceptOne(registry, 'EXECUTES_EVERY_HOUR');
 
-    clock.tick('03:00:00');
+    vi.advanceTimersByTime(10_800_000);
     expect(service.callsCount).toEqual(3);
     expect(job.lastDate()).toEqual(new Date('2020-01-01T03:00:00.000Z'));
 
-    clock.tick('03:00:01');
-    expect(job.running).toBe(false);
+    vi.advanceTimersByTime(10_801_000);
+    expect(job.isActive).toBe(false);
   });
 
   it(`should not run "cron" at all`, async () => {
@@ -198,7 +199,7 @@ describe('Cron', () => {
     await app.init();
     const registry = app.get(SchedulerRegistry);
 
-    expect(registry.getCronJob('DISABLED').running).toBeFalsy();
+    expect(registry.getCronJob('DISABLED').isActive).toBeFalsy();
   });
 
   it(`should return cron id by name`, async () => {
@@ -226,12 +227,12 @@ describe('Cron', () => {
 
     const job = registry.getCronJob('dynamic');
     expect(job).toBeDefined();
-    expect(job.running).toBe(false);
+    expect(job.isActive).toBe(false);
 
     job.start();
-    expect(job.running).toBe(true);
+    expect(job.isActive).toBe(true);
 
-    clock.tick(3000);
+    vi.advanceTimersByTime(3000);
     expect(service.dynamicCallsCount).toEqual(3);
   });
 
@@ -276,7 +277,7 @@ describe('Cron', () => {
     await app.close();
 
     expect(registry.getCronJobs().size).toBe(0);
-    expect(clock.countTimers()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('should return true for dynamic cron job', async () => {
@@ -293,29 +294,108 @@ describe('Cron', () => {
     expect(service.doesExist('dynamic')).toEqual(false);
   });
 
+  it('should not execute "cron" before initialDelay elapses', async () => {
+    const service = app.get(CronService);
+    await app.init();
+    const registry = app.get(SchedulerRegistry);
+    deleteAllRegisteredJobsExceptOne(registry, 'INITIAL_DELAY');
+
+    // Job should not have fired yet
+    vi.advanceTimersByTime(4999);
+    expect(service.initialDelayCalls).toEqual(0);
+
+    // After initialDelay (5000ms) the cron starts; one tick at t=6000ms
+    vi.advanceTimersByTime(1001);
+    expect(service.initialDelayCalls).toEqual(1);
+  });
+
+  it('should execute "cron" on schedule after initialDelay', async () => {
+    const service = app.get(CronService);
+    await app.init();
+    const registry = app.get(SchedulerRegistry);
+    deleteAllRegisteredJobsExceptOne(registry, 'INITIAL_DELAY');
+
+    // No ticks before the delay
+    vi.advanceTimersByTime(5000);
+    // Cron fires every second; advance 3 more seconds
+    vi.advanceTimersByTime(3000);
+    expect(service.initialDelayCalls).toEqual(3);
+  });
+
+  it('should not start "cron" when both disabled and initialDelay are set', async () => {
+    const service = app.get(CronService);
+    await app.init();
+    const registry = app.get(SchedulerRegistry);
+
+    expect(
+      registry.getCronJob('DISABLED_WITH_INITIAL_DELAY').isActive,
+    ).toBeFalsy();
+
+    vi.advanceTimersByTime(5000);
+    expect(service.initialDelayCalls).toEqual(0);
+    expect(
+      registry.getCronJob('DISABLED_WITH_INITIAL_DELAY').isActive,
+    ).toBeFalsy();
+  });
+
+  it('should not start "cron" after shutdown when initialDelay is pending', async () => {
+    const service = app.get(CronService);
+    await app.init();
+
+    // Close the app before the 5s delay elapses
+    vi.advanceTimersByTime(2000);
+    await app.close();
+
+    // Advance past the original delay — timeout must have been cleared
+    vi.advanceTimersByTime(5000);
+    expect(service.initialDelayCalls).toEqual(0);
+  });
+
   it(`should not log a warning when the provider is not request scoped`, async () => {
     const logger = {
-      log: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
+      log: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
     };
     Logger.overrideLogger(logger);
-    jest.spyOn(logger, 'warn');
+    vi.spyOn(logger, 'warn');
 
     await app.init();
 
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
+  it(`should throw when two providers declare a cron job with the same name`, async () => {
+    @Injectable()
+    class FirstService {
+      @Cron(CronExpression.EVERY_SECOND, { name: 'shared' })
+      handleCron() {}
+    }
+
+    @Injectable()
+    class SecondService {
+      @Cron(CronExpression.EVERY_SECOND, { name: 'shared' })
+      handleCron() {}
+    }
+
+    const module = await Test.createTestingModule({
+      imports: [ScheduleModule.forRoot()],
+      providers: [FirstService, SecondService],
+    }).compile();
+
+    await expect(module.createNestApplication().init()).rejects.toThrow(
+      DUPLICATE_SCHEDULER('Cron Job', 'shared'),
+    );
+  });
+
   afterEach(async () => {
-    clock.restore();
     await app.close();
+    vi.useRealTimers();
   });
 });
 
 describe('Cron - Request Scoped Provider', () => {
   let app: INestApplication;
-  let clock: sinon.SinonFakeTimers;
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
@@ -323,17 +403,17 @@ describe('Cron - Request Scoped Provider', () => {
     }).compile();
 
     app = module.createNestApplication();
-    clock = sinon.useFakeTimers({ now: 1577836800000 }); // 2020-01-01T00:00:00.000Z
+    vi.useFakeTimers({ now: 1577836800000 }); // 2020-01-01T00:00:00.000Z
   });
 
   it(`should log a warning when trying to register a cron in a request scoped provider`, async () => {
     const logger = {
-      log: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
+      log: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
     };
     Logger.overrideLogger(logger);
-    jest.spyOn(logger, 'warn');
+    vi.spyOn(logger, 'warn');
 
     await app.init();
     const registry = app.get(SchedulerRegistry);
@@ -346,7 +426,7 @@ describe('Cron - Request Scoped Provider', () => {
   });
 
   afterEach(async () => {
-    clock.restore();
     await app.close();
+    vi.useRealTimers();
   });
 });
